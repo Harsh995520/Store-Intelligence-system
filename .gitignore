@@ -1,0 +1,10 @@
+Store Intelligence System
+│
+├── .gitignore
+├── dashboard.py
+├── heatmap.py
+├── requirements.txt
+├── app/
+├── data/
+├── pipeline/
+└── README.md
