@@ -1,160 +1,92 @@
-# Store Intelligence System using Computer Vision
+# Store Intelligence System
 
-## Overview
+A computer-vision retail analytics application using **YOLOv8**, **ByteTrack**, **FastAPI**, and **Streamlit**.
 
-Store Intelligence System is an AI-powered retail analytics platform that uses Computer Vision to monitor customer activity inside a retail store.
+## What it does
 
-The system detects customers using YOLOv8, tracks their movement across different store zones, records customer events, and generates business insights through an interactive dashboard.
+- Upload a store video from the Streamlit dashboard.
+- Detect people (COCO class 0) with YOLOv8.
+- Track people across frames using the ByteTrack tracker.
+- Generate an annotated MP4, person-track counts, activity events, customer journeys, and a movement heatmap.
+- Expose analytics through FastAPI.
 
----
+> **Metric integrity:** The current single-video workflow records an ENTRY when a track first appears and a BROWSING event after the track persists. It does not automatically infer CHECKOUT or a purchase. Checkout/conversion metrics remain zero until a dedicated checkout-zone rule or POS integration is implemented.
 
-## Features
-
-* Customer Entry Detection
-* Browsing Zone Tracking
-* Checkout Detection
-* Customer Journey Analysis
-* Conversion Funnel Analytics
-* Store Heatmap Generation
-* Event Logging in JSONL Format
-* FastAPI Analytics Backend
-* Streamlit Dashboard
-
----
-
-## Tech Stack
-
-* Python
-* YOLOv8
-* OpenCV
-* FastAPI
-* Streamlit
-* Pandas
-* Plotly
-
----
-
-## Project Structure
+## Repository layout
 
 ```text
-Store-Intelligence-system/
-│
+.
 ├── app/
-├── pipeline/
-├── data/
-├── dashboard.py
-├── heatmap.py
-├── README.md
-├── DESIGN.md
-├── CHOICES.md
+│   └── main.py          # FastAPI API and video-processing worker
+├── dashboard.py         # Streamlit upload and analytics dashboard
 ├── requirements.txt
-└── events.jsonl
+├── render.yaml          # Render Blueprint for both services
+├── yolov8n.pt           # YOLOv8 nano weights
+└── data/                # Created at runtime (uploads, results, events)
 ```
 
----
+## Run locally (Windows PowerShell)
 
-## Workflow
+Python 3.11 is recommended.
 
-1. Detect customers using YOLOv8.
-2. Track movement across store zones.
-3. Generate ENTRY, BROWSING, and CHECKOUT events.
-4. Store events in JSONL format.
-5. Serve analytics through FastAPI.
-6. Visualize metrics using Streamlit.
-
----
-
-## Analytics Generated
-
-### Customer Journey
-
-Example:
-
-```text
-VIS_1: ENTRY → BROWSING → CHECKOUT
-VIS_2: ENTRY → BROWSING
-```
-
-### Funnel Metrics
-
-* Entry Count
-* Browsing Count
-* Checkout Count
-* Conversion Rate
-
-### Heatmap
-
-Visualizes customer movement and high-traffic areas inside the store.
-
----
-
-## How to Run
-
-### Install Dependencies
-
-```bash
+```powershell
+py -3.11 -m venv .venv
+.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
 pip install -r requirements.txt
+uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
-### Start FastAPI Backend
+Open a second terminal:
 
-```bash
-uvicorn app.main:app --reload
-```
-
-### Run Tracking Pipelines
-
-```bash
-python pipeline/entry_tracker.py
-python pipeline/floor_tracker.py
-python pipeline/billing_tracker.py
-```
-
-### Launch Dashboard
-
-```bash
+```powershell
+.venv\Scripts\Activate.ps1
+$env:API_URL="http://localhost:8000"
 streamlit run dashboard.py
 ```
 
----
+- Dashboard: http://localhost:8501
+- API docs: http://localhost:8000/docs
+- Health: http://localhost:8000/health
 
-## Event Log Format
+## Deploy to Render
 
-Events are stored in JSONL format.
+The included `render.yaml` defines two web services from this repository:
 
-Example:
+1. `store-intelligence-api` — FastAPI backend, YOLO inference and video processing.
+2. `store-intelligence-dashboard` — Streamlit frontend configured to call the API.
 
-```json
-{"visitor_id":"VIS_1","event":"ENTRY","timestamp":"2025-06-01T10:00:00"}
-{"visitor_id":"VIS_1","event":"BROWSING","timestamp":"2025-06-01T10:02:00"}
-{"visitor_id":"VIS_1","event":"CHECKOUT","timestamp":"2025-06-01T10:05:00"}
-```
+Steps:
 
----
+1. Push the repository to GitHub.
+2. In Render, choose **New + → Blueprint** and select this repository.
+3. Review the two services and deploy.
+4. Open the dashboard service URL. The API is available at its own service URL and `/docs`.
 
-## Documentation
+The Blueprint uses the Render free plan where available. Free instances have limited CPU/RAM, can spin down, and use ephemeral filesystem storage. Use short, low-resolution clips for the first test. Files and in-memory job status are not durable across restarts or redeploys. For persistent production use, attach a persistent disk or object storage and use a durable job queue.
 
-Additional project documentation:
+## API
 
-* DESIGN.md
-* CHOICES.md
+- `GET /` — service information
+- `GET /health` — health check
+- `POST /process` — upload a video (multipart field: `file`)
+- `GET /jobs` — recent jobs on this instance
+- `GET /jobs/{job_id}` — job status
+- `GET /jobs/{job_id}/video` — annotated MP4
+- `GET /jobs/{job_id}/heatmap` — generated heatmap
+- `GET /events` — event log
+- `GET /metrics` — aggregate event metrics
+- `GET /journey` — visitor journeys
 
----
+## Configuration
 
-## Future Improvements
+- `API_URL`: dashboard's backend base URL (default `http://localhost:8000`)
+- `DATA_DIR`: directory for uploaded videos, output files, and event log (default `./data`)
+- `YOLO_MODEL`: optional path to model weights (default repository `yolov8n.pt`, otherwise Ultralytics downloads `yolov8n.pt`)
+- `MAX_UPLOAD_MB`: upload limit in MB (default `200`)
 
-* Multi-camera support
-* Staff exclusion
-* Cloud deployment
-* Real-time notifications
-* Advanced customer analytics
+## Notes
 
----
-
-## Author
-
-Harsh Raj
-
-Galgotias University
-
-Purple Tech Challenge 2026 Submission
+- Hosted CPU inference is slower than a local GPU. The API explicitly uses CPU for predictable deployment.
+- The demo stores job state in process memory and files in the service filesystem. It is designed for a portfolio demo, not a multi-worker production system.
+- The legacy standalone tracking scripts are retained for reference; the deployed upload workflow is implemented in `app/main.py`.
