@@ -22,4 +22,7 @@ services:
       - key: PYTHON_VERSION
         value: 3.11.11
       - key: API_URL
-        value: https://store-intelligence-api.onrender.com
+        fromService:
+          type: web
+          name: store-intelligence-api
+          property: host
